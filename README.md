@@ -212,6 +212,124 @@ biofs://story/0xC919.../1234/genome.vcf    → P2P (decentralized, censorship-re
 
 ---
 
+## ⚖️ Story Protocol PIL Integration
+
+BioFS includes **Programmable IP Licensing (PIL)** support through the BioIPRegistry contract, enabling derivative tracking and license inheritance for genomic data workflows.
+
+### BioIP Assets vs IP Assets
+
+| Concept | BioFS | Story Protocol |
+|---------|-------|----------------|
+| **Asset Type** | BioIP Asset | IP Asset (IPA) |
+| **Registry** | BioIPRegistry.sol | IPAssetRegistry.sol |
+| **Licensing** | PIL-compatible | PIL native |
+| **Access Control** | NFT + Consent | NFT ownership |
+| **Deletion** | GDPR-compliant | Permanent |
+
+### Derivative Creation Flow
+
+```bash
+# 1. Create parent VCF with license terms
+biofs register-bioip genome.vcf \
+  --nft story/0xC919.../1 \
+  --license-terms 1 \
+  --type vcf
+
+# 2. Annotate VCF → SQLite (child)
+opencravat genome.vcf -o annotation.sqlite
+biofs create-derivative annotation.sqlite \
+  --parent-token 1 \
+  --type sqlite
+# ✅ Fresh license token minted
+# ✅ Child registered as derivative
+# ✅ Inherits PIL license from parent
+
+# 3. Generate CSV report → CSV (grandchild)
+biofs create-derivative report.csv \
+  --parent-token 2 \
+  --type csv
+# ✅ Fresh license token minted from SQLite
+# ✅ Grandchild registered
+# ✅ Inherits PIL license from grandparent
+```
+
+### Lineage Tree Tracking
+
+```
+VCF (Generation 0)
+├── SQLite (Generation 1)
+│   ├── CSV Report (Generation 2)
+│   └── PDF Report (Generation 2)
+├── BAM Alignment (Generation 1)
+│   └── Coverage Report (Generation 2)
+└── AlphaGenome Analysis (Generation 1)
+```
+
+Query lineage:
+```bash
+# Get ancestors
+biofs lineage --token 3
+# Returns: [VCF tokenId=1, SQLite tokenId=2]
+
+# Get descendants
+biofs descendants --token 1
+# Returns: [SQLite tokenId=2, BAM tokenId=5, AlphaGenome tokenId=6]
+```
+
+### License Token Lifecycle
+
+**Critical**: License tokens are **one-time use only**:
+
+```bash
+# ❌ WRONG - Reusing license token (error 0xb3e96921)
+LICENSE_TOKEN=$(biofs mint-license-token --parent 1)
+biofs register-derivative --child 2 --license $LICENSE_TOKEN  # ✅ OK
+biofs register-derivative --child 5 --license $LICENSE_TOKEN  # ❌ FAILS
+
+# ✅ CORRECT - Fresh token for each derivative
+LICENSE_TOKEN_1=$(biofs mint-license-token --parent 1)
+biofs register-derivative --child 2 --license $LICENSE_TOKEN_1
+
+LICENSE_TOKEN_2=$(biofs mint-license-token --parent 1)
+biofs register-derivative --child 5 --license $LICENSE_TOKEN_2
+```
+
+### PIL License Types
+
+**Non-Commercial License**:
+```bash
+biofs create-license \
+  --commercial-use false \
+  --derivatives-allowed true \
+  --attribution true
+```
+
+**Commercial with Royalties**:
+```bash
+biofs create-license \
+  --commercial-use true \
+  --rev-share 1500 \
+  --derivatives-reciprocal true
+```
+
+### Integration with Genomic Workflows
+
+**VCF Annotation Pipeline**:
+```
+User uploads VCF (root)
+     ↓
+OpenCRAVAT annotates → SQLite (child)
+     ↓
+Expert Curator generates → CSV (grandchild)
+
+All inherit non-commercial PIL license
+Full lineage tracked on-chain
+```
+
+See [docs/PIL_INTEGRATION.md](docs/PIL_INTEGRATION.md) for complete documentation.
+
+---
+
 ## 🛠️ Development
 
 ### Building from Source
@@ -247,19 +365,22 @@ biofs/
 │   ├── biofs/          # Daemon + FUSE driver
 │   └── biofsctl/       # CLI tool
 ├── pkg/
-│   ├── biocid/         # BioCID implementation
+│   ├── biocid/         # BioCID implementation + derivative tracking
+│   ├── bioip/          # BioIP registry integration (PIL)
 │   ├── consent/        # Consent verification
 │   ├── fuse/           # FUSE driver
 │   ├── p2p/            # libp2p networking
 │   ├── storage/        # Content storage
 │   └── crypto/         # Cryptographic operations
 ├── contracts/
-│   ├── ConsentRegistry.sol
-│   ├── BioNFT.sol
+│   ├── ConsentRegistry.sol    # Consent management
+│   ├── BioIPRegistry.sol      # PIL integration
+│   ├── BioNFT.sol             # NFT implementation
 │   └── test/
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   ├── PROTOCOL.md
+│   ├── PIL_INTEGRATION.md     # Story Protocol integration
 │   └── API.md
 └── test/
 ```
@@ -270,8 +391,9 @@ biofs/
 
 - **[Architecture](docs/ARCHITECTURE.md)**: System design and components
 - **[Protocol Specification](docs/PROTOCOL.md)**: BioCID format, P2P protocol
+- **[PIL Integration](docs/PIL_INTEGRATION.md)**: Story Protocol licensing & derivatives
 - **[API Reference](docs/API.md)**: CLI commands and Go API
-- **[Smart Contracts](docs/CONTRACTS.md)**: ConsentRegistry and BioNFT
+- **[Smart Contracts](docs/CONTRACTS.md)**: BioIPRegistry, ConsentRegistry, BioNFT
 - **[GDPR Compliance](docs/GDPR.md)**: How BioFS ensures compliance
 
 ---
@@ -333,6 +455,9 @@ biofs add trial-data.csv --nft story/clinical-trial/789
 ### Phase 1: Core Protocol ✅ (Q1 2026)
 - [x] BioCID specification
 - [x] Architecture document
+- [x] Story Protocol PIL integration
+- [x] BioIPRegistry smart contract
+- [x] Derivative tracking system
 - [ ] Consent smart contracts
 - [ ] biofs-daemon core
 

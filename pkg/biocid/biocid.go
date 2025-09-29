@@ -255,3 +255,87 @@ func ParseBiofsURI(uri string) (NFTReference, string, error) {
 
 	return nftRef, path, nil
 }
+
+// DerivativeInfo represents derivative relationship metadata
+type DerivativeInfo struct {
+	ParentBioCID   *BioCID   // Parent BioCID (nil if root)
+	ChildBioCIDs   []*BioCID // Child BioCIDs
+	Generation     int       // 0=root, 1=child, 2=grandchild, etc
+	LicenseTokenID string    // License token used to create this derivative
+	LicenseTermsID string    // PIL license terms ID
+}
+
+// IsRoot returns true if this is a root BioIP (no parent)
+func (d *DerivativeInfo) IsRoot() bool {
+	return d.ParentBioCID == nil && d.Generation == 0
+}
+
+// HasChildren returns true if this BioIP has derivatives
+func (d *DerivativeInfo) HasChildren() bool {
+	return len(d.ChildBioCIDs) > 0
+}
+
+// ChildCount returns the number of direct children
+func (d *DerivativeInfo) ChildCount() int {
+	return len(d.ChildBioCIDs)
+}
+
+// NewDerivativeInfo creates a new DerivativeInfo
+func NewDerivativeInfo(generation int) *DerivativeInfo {
+	return &DerivativeInfo{
+		Generation:   generation,
+		ChildBioCIDs: make([]*BioCID, 0),
+	}
+}
+
+// AddChild adds a child BioCID to the derivative info
+func (d *DerivativeInfo) AddChild(child *BioCID) {
+	d.ChildBioCIDs = append(d.ChildBioCIDs, child)
+}
+
+// SetParent sets the parent BioCID
+func (d *DerivativeInfo) SetParent(parent *BioCID) {
+	d.ParentBioCID = parent
+}
+
+// LineageMetadata represents complete lineage information
+type LineageMetadata struct {
+	Self       *BioCID   // Current BioCID
+	Ancestors  []*BioCID // All ancestors (parent, grandparent, etc)
+	Descendants []*BioCID // All descendants (children, grandchildren, etc)
+	Generation int       // Generation number (0=root)
+}
+
+// GetAncestorCount returns number of ancestors
+func (l *LineageMetadata) GetAncestorCount() int {
+	return len(l.Ancestors)
+}
+
+// GetDescendantCount returns number of descendants
+func (l *LineageMetadata) GetDescendantCount() int {
+	return len(l.Descendants)
+}
+
+// IsRoot returns true if this is a root with no ancestors
+func (l *LineageMetadata) IsRoot() bool {
+	return len(l.Ancestors) == 0 && l.Generation == 0
+}
+
+// GetRoot returns the root ancestor (generation 0)
+func (l *LineageMetadata) GetRoot() *BioCID {
+	if l.IsRoot() {
+		return l.Self
+	}
+	if len(l.Ancestors) > 0 {
+		return l.Ancestors[len(l.Ancestors)-1]
+	}
+	return nil
+}
+
+// GetParent returns the immediate parent (if any)
+func (l *LineageMetadata) GetParent() *BioCID {
+	if len(l.Ancestors) > 0 {
+		return l.Ancestors[0]
+	}
+	return nil
+}
